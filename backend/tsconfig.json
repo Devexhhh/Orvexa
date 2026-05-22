@@ -1,10 +1,41 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
-    "outDir": "dist",
+
+    "module": "NodeNext",
+
+    "moduleResolution": "NodeNext",
+
+    "rootDir": "./src",
+
+    "outDir": "./dist",
+
+    "strict": true,
+
     "esModuleInterop": true,
-    "strict": true
+
+    "skipLibCheck": true,
+
+    "forceConsistentCasingInFileNames": true,
+
+    "resolveJsonModule": true,
+
+    "verbatimModuleSyntax": false,
+
+    "baseUrl": "./src",
+
+    "paths": {
+      "@config/*": ["config/*"],
+      "@ws/*": ["ws/*"],
+      "@modules/*": ["modules/*"],
+      "@database/*": ["database/*"],
+      "@shared/*": ["shared/*"]
+    },
+
+    "ignoreDeprecations": "6.0"
   },
-  "include": ["**/*.ts"]
+
+  "include": ["src"],
+
+  "exclude": ["node_modules", "dist"]
 }
