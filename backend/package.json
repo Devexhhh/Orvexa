@@ -1,18 +1,57 @@
 {
-  "name": "nexus-chat-backend",
+  "name": "orvexa-backend",
   "version": "1.0.0",
+  "description": "Orvexa realtime communication backend",
+  "main": "dist/server.js",
+  "private": true,
+
   "scripts": {
-    "dev": "ts-node server.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio"
   },
+
   "dependencies": {
-    "ws": "^8.18.0"
+    "@prisma/client": "^7.8.0",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.1",
+    "uuid": "^14.0.0",
+    "ws": "^8.18.3",
+    "zod": "^4.1.5"
   },
+
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.13",
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.3.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+
+    "prisma": "^7.8.0",
+
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.0"
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.2"
+  },
+
+  "prisma": {
+    "schema": "src/database/prisma/schema.prisma"
   }
 }
