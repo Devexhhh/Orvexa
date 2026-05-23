@@ -46,7 +46,6 @@ export function attachWebSocketHandlers(wss: WebSocketServer) {
         wss.clients.forEach((ws: CustomWebSocket) => {
             if (!ws.isAlive) {
                 console.log("Terminating dead socket");
-
                 return ws.terminate();
             }
             ws.isAlive = false;
