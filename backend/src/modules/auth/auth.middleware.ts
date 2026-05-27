@@ -27,8 +27,8 @@ export function authenticate(
         };
 
         req.user = {
-            userId: decoded.userId,
-        };
+            id: decoded.userId,
+        } as Express.User;
 
         next();
     } catch (error) {
