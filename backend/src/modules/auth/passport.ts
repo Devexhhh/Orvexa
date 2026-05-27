@@ -1,5 +1,7 @@
 import passport from "passport";
+
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+
 import { prisma } from "@database/prisma";
 
 passport.use(
@@ -9,13 +11,19 @@ passport.use(
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
             callbackURL: process.env.GOOGLE_CALLBACK_URL!,
         },
-        async (_accessToken, _refreshToken, profile, done) => {
+        async (
+            _accessToken,
+            _refreshToken,
+            profile,
+            done,
+        ) => {
             try {
                 const existingUser = await prisma.user.findUnique({
                     where: {
                         googleId: profile.id,
                     },
                 });
+
                 if (existingUser) {
                     return done(null, existingUser);
                 }
@@ -30,7 +38,6 @@ passport.use(
                         avatar: profile.photos?.[0].value,
                     },
                 });
-
                 return done(null, newUser);
             } catch (error) {
                 return done(error);
@@ -38,5 +45,4 @@ passport.use(
         },
     ),
 );
-
 export default passport;
