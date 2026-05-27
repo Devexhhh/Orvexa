@@ -4,10 +4,104 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
+  output   = "../generated"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  googleId      String         @unique
+  email         String         @unique
+  username      String
+  avatar        String?
+  createdAt     DateTime       @default(now())
+  messages      Message[]
+  roomMembers   RoomMember[]
+  messageReads  MessageRead[]
+  lastSeen      DateTime?
+  notifications Notification[]
+}
+
+model Room {
+  id        String       @id @default(cuid())
+  name      String
+  isGroup   Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  members   RoomMember[]
+  messages  Message[]
+  isDirect  Boolean      @default(false)
+
+  @@index([isDirect])
+  @@index([isGroup])
+}
+
+model RoomMember {
+  id       String   @id @default(cuid())
+  userId   String
+  roomId   String
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id])
+  room     Room     @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
+  @@index([userId])
+  @@index([roomId])
+}
+
+model Message {
+  id        String        @id @default(cuid())
+  roomId    String
+  senderId  String
+  type      String
+  content   String
+  fileUrl   String?
+  fileName  String?
+  fileSize  Int?
+  createdAt DateTime      @default(now())
+  room      Room          @relation(fields: [roomId], references: [id])
+  sender    User          @relation(fields: [senderId], references: [id])
+  reads     MessageRead[]
+  isEdited  Boolean       @default(false)
+  editedAt  DateTime?
+  isDeleted Boolean       @default(false)
+  deletedAt DateTime?
+
+  @@index([roomId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([roomId, createdAt])
+}
+
+model MessageRead {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+  @@index([userId])
+  @@index([messageId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  content   String?
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([isRead])
 }
