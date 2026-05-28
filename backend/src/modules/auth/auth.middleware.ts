@@ -4,9 +4,7 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 
 export function authenticate(
     req: Request,
-
     res: Response,
-
     next: NextFunction,
 ) {
     try {
@@ -15,7 +13,6 @@ export function authenticate(
         if (!authHeader) {
             return res.status(401).json({
                 success: false,
-
                 message: "Unauthorized",
             });
         }
@@ -26,15 +23,12 @@ export function authenticate(
             userId: string;
         };
 
-        req.user = {
-            id: decoded.userId,
-        } as Express.User;
+        req.userId = decoded.userId;
 
         next();
     } catch (error) {
         return res.status(401).json({
             success: false,
-
             message: "Invalid token",
         });
     }
