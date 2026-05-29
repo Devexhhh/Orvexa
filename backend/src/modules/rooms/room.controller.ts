@@ -119,3 +119,28 @@ export async function getUserConversationsController(
         });
     }
 }
+
+export async function addMemberController(
+    req: Request,
+    res: Response,
+) {
+    try {
+        const roomId = req.params.roomId;
+        const userId = req.body.userId;
+
+        const membership = await joinRoomService(
+            String(roomId),
+            userId,
+        );
+
+        return res.status(200).json({
+            success: true,
+            membership,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to add member",
+        });
+    }
+}
