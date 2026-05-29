@@ -51,7 +51,6 @@ export async function deleteMessageService(messageId: string, userId: string) {
 
 export async function markMessagesAsReadService(
     roomId: string,
-
     userId: string,
 ) {
     const unreadMessages = await prisma.message.findMany({
