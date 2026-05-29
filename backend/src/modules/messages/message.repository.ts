@@ -20,9 +20,7 @@ export async function createMessage(data: PersistMessageDTO) {
 
 export async function getRoomMessages(
     roomId: string,
-
     limit = 20,
-
     cursor?: string,
 ) {
     return prisma.message.findMany({
@@ -55,11 +53,7 @@ export async function getRoomMessages(
     });
 }
 
-export async function markMessageAsRead(
-    messageId: string,
-
-    userId: string,
-) {
+export async function markMessageAsRead(messageId: string, userId: string) {
     return prisma.messageRead.upsert({
         where: {
             messageId_userId: {
@@ -102,12 +96,21 @@ export async function editMessage(
     userId: string,
     content: string,
 ) {
-    return prisma.message.updateMany({
+    const message = await prisma.message.findFirst({
         where: {
             id: messageId,
             senderId: userId,
         },
+    });
 
+    if (!message) {
+        throw new Error("Message not found");
+    }
+
+    return prisma.message.update({
+        where: {
+            id: messageId,
+        },
         data: {
             content,
             isEdited: true,
