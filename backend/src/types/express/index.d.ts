@@ -1,15 +1,13 @@
-import "express";
+declare namespace Express {
 
-declare global {
-    namespace Express {
-        interface User {
-            userId: string;
-        }
-
-        interface Request {
-            user?: User;
-        }
+    interface User {
+        id: string;
+        googleId: string;
+        email: string;
+        username: string;
+        avatar?: string | null;
+        createdAt: Date;
+        lastSeen?: Date | null;
     }
-}
 
-export { };
+}
