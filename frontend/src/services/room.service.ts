@@ -38,3 +38,16 @@ export async function joinRoom(
 
     return response.data;
 }
+export async function addRoomMember(
+    roomId: string,
+    userId: string,
+) {
+    const response = await api.post(
+        `/api/rooms/${roomId}/add-member`,
+        {
+            userId,
+        },
+    );
+
+    return response.data;
+}

@@ -6,6 +6,8 @@ export enum SocketEvent {
     LEAVE_ROOM = "LEAVE_ROOM",
     USER_JOINED = "USER_JOINED",
     USER_LEFT = "USER_LEFT",
+    ROOM_ADDED = "ROOM_ADDED",
+    ROOM_MEMBER_ADDED = "ROOM_MEMBER_ADDED",
 
     //
     // Messages
@@ -20,6 +22,7 @@ export enum SocketEvent {
     MESSAGE_EDITED = "MESSAGE_EDITED",
     MESSAGE_DELETED = "MESSAGE_DELETED",
     MESSAGE_SEEN = "MESSAGE_SEEN",
+    ROOM_MESSAGE_SEEN = "ROOM_MESSAGE_SEEN",
     //
     // Typing
     //
@@ -39,6 +42,7 @@ export enum SocketEvent {
     //
     USER_ONLINE = "USER_ONLINE",
     USER_OFFLINE = "USER_OFFLINE",
+    ONLINE_USERS = "ONLINE_USERS",
 
     //
     // Notifications

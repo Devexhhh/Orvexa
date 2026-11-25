@@ -1,32 +1,60 @@
 import { Request, Response } from "express";
+import { AppError } from "@shared/errors/AppError";
 import {
     createRoomService,
     joinRoomService,
     getUserRoomsService,
+    addMemberService,
+    createOrGetDirectRoomService,
+    getUserConversationsService,
 } from "./room.service";
+import {
+    addMemberSchema,
+    createDirectRoomSchema,
+    createRoomSchema,
+} from "./room.schema";
+import {
+    notifyMemberAdded,
+    notifyRoomAdded,
+} from "@socket/emitters/room.emitter";
 
-import { createOrGetDirectRoomService } from "./room.service";
-import { getUserConversationsService } from "./room.service";
+function sendError(res: Response, error: unknown, fallback: string) {
+    if (error instanceof AppError) {
+        return res.status(error.statusCode).json({
+            success: false,
+            message: error.message,
+        });
+    }
+
+    console.error(fallback, error);
+
+    return res.status(500).json({
+        success: false,
+        message: fallback,
+    });
+}
 
 export async function createRoomController(req: Request, res: Response) {
     try {
-        const room = await createRoomService(
-            {
-                name: req.body.name,
-                isGroup: req.body.isGroup,
-            },
-            req.userId!,
-        );
+        const parsed = createRoomSchema.safeParse(req.body);
+
+        if (!parsed.success) {
+            throw new AppError("Room name is required", 400);
+        }
+
+        const room = (await createRoomService(parsed.data, req.userId!))!;
+
+        //
+        // Subscribe the creator's sockets (all tabs) and show it there
+        //
+        await notifyRoomAdded(req.userId!, room.id, room);
+
         return res.status(201).json({
             success: true,
             room,
         });
     } catch (error) {
-        console.error("CREATE ROOM ERROR:", error);
-        return res.status(500).json({
-            success: false,
-            message: error instanceof Error ? error.message : "Failed to create room",
-        });
+        return sendError(res, error, "Failed to create room");
     }
 }
 
@@ -43,11 +71,7 @@ export async function joinRoomController(req: Request, res: Response) {
             membership,
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-
-            message: "Failed to join room",
-        });
+        return sendError(res, error, "Failed to join room");
     }
 }
 
@@ -61,41 +85,51 @@ export async function getUserRoomsController(req: Request, res: Response) {
             rooms,
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-
-            message: "Failed to fetch rooms",
-        });
+        return sendError(res, error, "Failed to fetch rooms");
     }
 }
 
 export async function createDirectRoomController(
     req: Request,
-
     res: Response,
 ) {
     try {
-        const currentUserId = req.userId!;
-        const { targetUserId } = req.body;
+        const parsed = createDirectRoomSchema.safeParse(req.body);
 
-        const room = await createOrGetDirectRoomService(
-            currentUserId,
+        if (!parsed.success) {
+            throw new AppError("targetUserId is required", 400);
+        }
 
+        const { targetUserId } = parsed.data;
+
+        const result = await createOrGetDirectRoomService(
+            req.userId!,
             targetUserId,
         );
 
-        return res.status(200).json({
-            success: true,
+        //
+        // New DM: make it appear for the other user too
+        //
+        if (result.created && result.targetConversation) {
+            await notifyRoomAdded(
+                req.userId!,
+                result.conversation.id,
+                result.conversation,
+            );
 
-            room,
+            await notifyRoomAdded(
+                targetUserId,
+                result.conversation.id,
+                result.targetConversation,
+            );
+        }
+
+        return res.status(result.created ? 201 : 200).json({
+            success: true,
+            room: result.conversation,
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-
-            message:
-                error instanceof Error ? error.message : "Failed to create direct room",
-        });
+        return sendError(res, error, "Failed to create direct room");
     }
 }
 
@@ -112,11 +146,7 @@ export async function getUserConversationsController(
             conversations,
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-
-            message: "Failed to fetch conversations",
-        });
+        return sendError(res, error, "Failed to fetch conversations");
     }
 }
 
@@ -125,22 +155,28 @@ export async function addMemberController(
     res: Response,
 ) {
     try {
-        const roomId = req.params.roomId;
-        const userId = req.body.userId;
+        const parsed = addMemberSchema.safeParse(req.body);
 
-        const membership = await joinRoomService(
-            String(roomId),
-            userId,
+        if (!parsed.success) {
+            throw new AppError("userId is required", 400);
+        }
+
+        const roomId = String(req.params.roomId);
+
+        const { membership, member, conversation } = await addMemberService(
+            roomId,
+            req.userId!,
+            parsed.data.userId,
         );
 
-        return res.status(200).json({
+        await notifyMemberAdded(roomId, member, conversation);
+
+        return res.status(201).json({
             success: true,
             membership,
+            member,
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Failed to add member",
-        });
+        return sendError(res, error, "Failed to add member");
     }
 }

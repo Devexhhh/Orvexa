@@ -31,3 +31,31 @@ export function formatMessageDate(dateString: string) {
         },
     );
 }
+
+export function formatLastSeen(dateString?: string | null) {
+    if (!dateString) {
+        return "Offline";
+    }
+
+    const date = new Date(dateString);
+    const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+
+    if (diffMinutes < 1) {
+        return "Last seen just now";
+    }
+
+    if (diffMinutes < 60) {
+        return `Last seen ${diffMinutes} min ago`;
+    }
+
+    const time = date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    const day = formatMessageDate(dateString);
+
+    return day === "Today"
+        ? `Last seen today at ${time}`
+        : `Last seen ${day.toLowerCase() === "yesterday" ? "yesterday" : day} at ${time}`;
+}

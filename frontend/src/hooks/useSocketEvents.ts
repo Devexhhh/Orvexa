@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getSocket } from "@/lib/socket/socketClient";
 import { SocketEvent } from "@/types/socket";
 import { useMessageStore } from "@/store/message.store";
@@ -8,100 +8,134 @@ import { useTypingStore } from "@/store/typing.store";
 import { usePresenceStore } from "@/store/presence.store";
 import { useRoomStore } from "@/store/room.store";
 import { useSocketStore } from "@/store/socket.store";
+import { useAuthStore } from "@/store/auth.store";
+import { getConversations } from "@/services/room.service";
 
+//
+// Listeners read from stores with getState() so they always see
+// the latest active room / user, instead of the values captured
+// when the socket connected.
+//
 export default function useSocketEvents() {
-    console.log("HOOK MOUNTED");
-
-    const addMessage = useMessageStore((state) => state.addMessage);
-    const setTypingUsers = useTypingStore((state) => state.setTypingUsers);
-    const addOnlineUser = usePresenceStore((state) => state.addOnlineUser);
-    const removeOnlineUser = usePresenceStore((state) => state.removeOnlineUser);
-    const updateRoomLastMessage = useRoomStore(
-        (state) => state.updateRoomLastMessage,
-    );
-    const incrementUnread = useRoomStore((state) => state.incrementUnread);
-    const activeRoom = useRoomStore((state) => state.activeRoom);
-    const replaceOptimisticMessage = useMessageStore(
-        (state) => state.replaceOptimisticMessage,
-    );
-    const markRoomMessagesSeen = useMessageStore(
-        (state) => state.markRoomMessagesSeen,
-    );
-    const markMessageSeen = useMessageStore((state) => state.markMessageSeen);
-    const editMessage = useMessageStore((state) => state.editMessage);
     const connected = useSocketStore((state) => state.connected);
+    const hasConnectedBefore = useRef(false);
 
     useEffect(() => {
+        if (!connected) {
+            return;
+        }
+
         const socket = getSocket();
         if (!socket) {
             return;
         }
 
-        console.log("ATTACHING LISTENER");
+        //
+        // Reconnect: catch up on anything missed while offline
+        //
+        if (hasConnectedBefore.current) {
+            getConversations()
+                .then((data) => useRoomStore.getState().setRooms(data.conversations || []))
+                .catch(console.error);
+        }
+        hasConnectedBefore.current = true;
 
         socket.onmessage = (event) => {
-            console.log("RAW_SOCKET_EVENT", event.data);
-            const payload = JSON.parse(event.data);
-            console.log("FULL PAYLOAD", payload);
-            console.log("PARSED_EVENT", payload.event);
+            // Wire payloads are untyped JSON from the server
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let payload: { event: SocketEvent; data: any };
+
+            try {
+                payload = JSON.parse(event.data);
+            } catch {
+                return;
+            }
+
+            const { data } = payload;
+            const rooms = useRoomStore.getState();
+            const messages = useMessageStore.getState();
+            const typing = useTypingStore.getState();
+            const presence = usePresenceStore.getState();
+            const currentUserId = useAuthStore.getState().user?.id;
 
             switch (payload.event) {
-                case SocketEvent.MESSAGE_RECEIVED:
-                    if (activeRoom?.id !== payload.data.roomId) {
-                        incrementUnread(payload.data.roomId);
+                case SocketEvent.MESSAGE_RECEIVED: {
+                    const isOwn = data.senderId === currentUserId;
+
+                    if (!isOwn && rooms.activeRoom?.id !== data.roomId) {
+                        rooms.incrementUnread(data.roomId);
                     }
 
-                    replaceOptimisticMessage(payload.data.roomId, payload.data);
-
-                    addMessage(payload.data.roomId, {
-                        ...payload.data,
+                    messages.replaceOptimisticMessage(data.roomId, {
+                        ...data,
                         status: "sent",
                     });
 
-                    updateRoomLastMessage(payload.data.roomId, {
-                        content: payload.data.content,
-                        createdAt: payload.data.createdAt,
+                    rooms.updateRoomLastMessage(data.roomId, {
+                        content: data.content,
+                        createdAt: data.createdAt,
                     });
 
+                    typing.removeTypingUser(data.roomId, data.senderId);
+                    break;
+                }
+
+                case SocketEvent.ROOM_ADDED:
+                    rooms.upsertRoom(data);
                     break;
 
-                case SocketEvent.START_TYPING:
-                    setTypingUsers(
-                        payload.data.roomId,
-                        payload.data.users,
-                    );
-
+                case SocketEvent.ROOM_MEMBER_ADDED:
+                    rooms.addRoomMember(data.roomId, data.member);
                     break;
 
-                case SocketEvent.STOP_TYPING:
-                    setTypingUsers(payload.data.roomId, payload.data.users);
+                case SocketEvent.USER_TYPING:
+                    if (data.userId !== currentUserId) {
+                        typing.addTypingUser(data.roomId, data.userId);
+                    }
                     break;
+
+                case SocketEvent.USER_STOPPED_TYPING:
+                    typing.removeTypingUser(data.roomId, data.userId);
+                    break;
+
+                case SocketEvent.ONLINE_USERS:
+                    presence.setOnlineUsers(data.userIds || []);
+                    break;
+
                 case SocketEvent.USER_ONLINE:
-                    addOnlineUser(payload.data.userId);
-
+                    presence.addOnlineUser(data.userId);
                     break;
 
                 case SocketEvent.USER_OFFLINE:
-                    removeOnlineUser(payload.data.userId);
+                    presence.removeOnlineUser(data.userId);
 
+                    if (data.lastSeen) {
+                        rooms.setMemberLastSeen(data.userId, data.lastSeen);
+                    }
                     break;
 
                 case SocketEvent.ROOM_MESSAGE_SEEN:
-                    markRoomMessagesSeen(payload.data.roomId);
+                    //
+                    // Someone else read the room: my messages are seen
+                    //
+                    if (data.userId !== currentUserId) {
+                        messages.markRoomMessagesSeen(data.roomId);
+                    }
                     break;
 
                 case SocketEvent.MESSAGE_SEEN:
-                    markMessageSeen(payload.data.roomId, payload.data.messageId);
+                    if (data.userId !== currentUserId) {
+                        messages.markMessageSeen(data.roomId, data.messageId);
+                    }
                     break;
 
                 case SocketEvent.MESSAGE_EDITED:
-                    console.log("MESSAGE_EDITED RECEIVED", payload);
+                    messages.editMessage(data.roomId, data.messageId, data.content);
+                    break;
 
-                    editMessage(
-                        payload.data.roomId,
-                        payload.data.messageId,
-                        payload.data.content,
-                    );
+                case SocketEvent.ERROR:
+                case SocketEvent.RATE_LIMIT_EXCEEDED:
+                    console.warn("Socket error:", data?.message);
                     break;
             }
         };

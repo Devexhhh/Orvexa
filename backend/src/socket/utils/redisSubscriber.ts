@@ -1,6 +1,7 @@
 import { redisSubscriber } from "@config/redis";
 import { roomManager } from "../managers/roomManager";
 import { SERVER_ID } from "@shared/constants/server";
+import { USER_EVENTS_CHANNEL, deliverToLocalUser } from "./userEmitter";
 
 export async function subscribeToRoomEvents() {
     await redisSubscriber.subscribe(
@@ -24,6 +25,20 @@ export async function subscribeToRoomEvents() {
                     data: payload.data,
                 },
             );
+        },
+    );
+
+    await redisSubscriber.subscribe(
+        USER_EVENTS_CHANNEL,
+
+        (message: string) => {
+            const payload = JSON.parse(message);
+
+            if (payload.serverId === SERVER_ID) {
+                return;
+            }
+
+            deliverToLocalUser(payload);
         },
     );
 }

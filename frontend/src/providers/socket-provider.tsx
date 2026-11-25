@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { connectSocket } from "@/lib/socket/socketClient";
+import { connectSocket, disconnectSocket } from "@/lib/socket/socketClient";
 import { useAuthStore } from "@/store/auth.store";
-import { useSocketStore } from "@/store/socket.store";
 
 export default function SocketProvider({
     children,
@@ -12,25 +11,15 @@ export default function SocketProvider({
 }) {
     const token = useAuthStore((state) => state.token);
 
-    const setConnected = useSocketStore((state) => state.setConnected);
-
     useEffect(() => {
         if (!token) {
             return;
         }
 
-        const socket = connectSocket(token);
-
-        socket!.onopen = () => {
-            setConnected(true);
-        };
-
-        socket!.onclose = () => {
-            setConnected(false);
-        };
+        connectSocket(token);
 
         return () => {
-            socket!.close();
+            disconnectSocket();
         };
     }, [token]);
 

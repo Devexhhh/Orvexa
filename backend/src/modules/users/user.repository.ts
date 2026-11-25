@@ -1,12 +1,12 @@
 import { prisma } from "@database/prisma";
 
-export async function updateLastSeen(userId: string) {
+export async function updateLastSeen(userId: string, lastSeen: Date) {
     return prisma.user.updateMany({
         where: {
             id: userId,
         },
         data: {
-            lastSeen: new Date(),
+            lastSeen,
         },
     });
 }

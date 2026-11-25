@@ -9,8 +9,8 @@ export default function CreateRoomModal() {
     const [name, setName] = useState("");
     const createRoomOpen = useModalStore((state) => state.createRoomOpen);
     const setCreateRoomOpen = useModalStore((state) => state.setCreateRoomOpen);
-    const rooms = useRoomStore((state) => state.rooms);
-    const setRooms = useRoomStore((state) => state.setRooms);
+    const upsertRoom = useRoomStore((state) => state.upsertRoom);
+    const setActiveRoom = useRoomStore((state) => state.setActiveRoom);
 
     if (!createRoomOpen) {
         return null;
@@ -27,7 +27,8 @@ export default function CreateRoomModal() {
                 isGroup: true,
             });
 
-            setRooms([...rooms, data.room]);
+            upsertRoom(data.room);
+            setActiveRoom(data.room);
             setCreateRoomOpen(false);
             setName("");
         } catch (error) {

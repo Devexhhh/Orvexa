@@ -9,6 +9,8 @@ import { SocketEvent } from "../types/event.types";
 import { broadcastMessage } from "../utils/broadcast";
 import { validateSocketEvent } from "../middleware/validateEvent";
 import { sendMessageSchema } from "../schemas/message.schema";
+import { isRoomMemberService } from "@modules/rooms/room.service";
+import { sendSocketError } from "@shared/utils/socketError";
 
 export async function handleSendMessage(
     ws: CustomWebSocket,
@@ -27,6 +29,14 @@ export async function handleSendMessage(
     }
 
     const validatedData = validation.data;
+
+    //
+    // Only members can post
+    //
+    if (!(await isRoomMemberService(validatedData.roomId, ws.userId!))) {
+        sendSocketError(ws, "You are not a member of this room");
+        return;
+    }
 
     //
     // Persist message
@@ -61,8 +71,8 @@ export async function handleSendMessage(
                 not: ws.userId,
             },
         },
-        include: {
-            user: true,
+        select: {
+            userId: true,
         },
     });
 
@@ -78,7 +88,7 @@ export async function handleSendMessage(
             },
         });
 
-        sendNotificationToUser(
+        await sendNotificationToUser(
             member.userId,
             notification,
         );

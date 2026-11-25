@@ -54,6 +54,9 @@ export async function markMessagesAsReadService(
     userId: string,
 ) {
     const unreadMessages = await prisma.message.findMany({
+        select: {
+            id: true,
+        },
         where: {
             roomId,
 
@@ -69,7 +72,11 @@ export async function markMessagesAsReadService(
         },
     });
 
-    await prisma.messageRead.createMany({
+    if (unreadMessages.length === 0) {
+        return 0;
+    }
+
+    const result = await prisma.messageRead.createMany({
         data: unreadMessages.map((message) => ({
             messageId: message.id,
 
@@ -78,4 +85,6 @@ export async function markMessagesAsReadService(
 
         skipDuplicates: true,
     });
+
+    return result.count;
 }

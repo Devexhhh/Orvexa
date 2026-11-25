@@ -1,11 +1,48 @@
 import { prisma } from "@database/prisma";
+import { Prisma } from "@database/generated";
 import { CreateRoomDTO } from "./room.types";
+
+//
+// Shape used to build a conversation for the sidebar
+//
+const conversationRoomInclude = {
+    members: {
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    username: true,
+                    avatar: true,
+                    lastSeen: true,
+                },
+            },
+        },
+    },
+    messages: {
+        orderBy: {
+            createdAt: "desc",
+        },
+        take: 1,
+    },
+} satisfies Prisma.RoomInclude;
+
+export type ConversationRoom = Prisma.RoomGetPayload<{
+    include: typeof conversationRoomInclude;
+}>;
 
 export async function createRoom(data: CreateRoomDTO) {
     return prisma.room.create({
         data: {
             name: data.name,
             isGroup: data.isGroup || false,
+        },
+    });
+}
+
+export async function findRoomById(roomId: string) {
+    return prisma.room.findUnique({
+        where: {
+            id: roomId,
         },
     });
 }
@@ -32,6 +69,19 @@ export async function getUserRooms(userId: string) {
             room: true,
         },
     });
+}
+
+export async function getUserRoomIds(userId: string) {
+    const memberships = await prisma.roomMember.findMany({
+        where: {
+            userId,
+        },
+        select: {
+            roomId: true,
+        },
+    });
+
+    return memberships.map((membership) => membership.roomId);
 }
 
 export async function isRoomMember(roomId: string, userId: string) {
@@ -107,6 +157,83 @@ export async function createDirectRoom(
     });
 }
 
+async function countUnread(roomId: string, userId: string) {
+    return prisma.message.count({
+        where: {
+            roomId,
+
+            senderId: {
+                not: userId,
+            },
+
+            reads: {
+                none: {
+                    userId,
+                },
+            },
+        },
+    });
+}
+
+//
+// Map a room to the conversation shape
+// as seen by `userId`
+//
+function toConversation(
+    room: ConversationRoom,
+    userId: string,
+    unreadCount: number,
+) {
+    let displayName = room.name;
+    let avatar: string | null = null;
+
+    if (room.isDirect) {
+        const otherUser = room.members.find(
+            (member) => member.userId !== userId,
+        )?.user;
+
+        if (otherUser) {
+            displayName = otherUser.username;
+            avatar = otherUser.avatar || null;
+        }
+    }
+
+    return {
+        id: room.id,
+        roomId: room.id,
+        name: displayName,
+        avatar,
+        isDirect: room.isDirect,
+        isGroup: room.isGroup,
+        unreadCount,
+        lastMessage: room.messages[0] || null,
+        updatedAt: room.messages[0]?.createdAt || room.createdAt,
+        members: room.members.map((member) => member.user),
+    };
+}
+
+export type Conversation = ReturnType<typeof toConversation>;
+
+export async function getConversationForUser(
+    roomId: string,
+    userId: string,
+) {
+    const room = await prisma.room.findUnique({
+        where: {
+            id: roomId,
+        },
+        include: conversationRoomInclude,
+    });
+
+    if (!room) {
+        return null;
+    }
+
+    const unreadCount = await countUnread(room.id, userId);
+
+    return toConversation(room, userId, unreadCount);
+}
+
 export async function getUserConversations(userId: string) {
     const memberships = await prisma.roomMember.findMany({
         where: {
@@ -115,77 +242,16 @@ export async function getUserConversations(userId: string) {
 
         include: {
             room: {
-                include: {
-                    members: {
-                        include: {
-                            user: true,
-                        },
-                    },
-
-                    messages: {
-                        orderBy: {
-                            createdAt: "desc",
-                        },
-
-                        take: 1,
-                    },
-                },
+                include: conversationRoomInclude,
             },
         },
     });
 
     return Promise.all(
         memberships.map(async (membership) => {
-            const room = membership.room;
+            const unreadCount = await countUnread(membership.roomId, userId);
 
-            //
-            // Find unread count
-            //
-            const unreadCount = await prisma.message.count({
-                where: {
-                    roomId: room.id,
-
-                    senderId: {
-                        not: userId,
-                    },
-
-                    reads: {
-                        none: {
-                            userId,
-                        },
-                    },
-                },
-            });
-
-            //
-            // Determine room display name
-            //
-            let displayName = room.name;
-
-            let avatar: string | null = null;
-
-            if (room.isDirect) {
-                const otherUser = room.members.find(
-                    (member) => member.userId !== userId,
-                )?.user;
-
-                if (otherUser) {
-                    displayName = otherUser.username;
-
-                    avatar = otherUser.avatar || null;
-                }
-            }
-
-            return {
-                roomId: room.id,
-                name: displayName,
-                avatar,
-                isDirect: room.isDirect,
-                isGroup: room.isGroup,
-                unreadCount,
-                lastMessage: room.messages[0] || null,
-                updatedAt: room.messages[0]?.createdAt || room.createdAt,
-            };
+            return toConversation(membership.room, userId, unreadCount);
         }),
     );
 }
