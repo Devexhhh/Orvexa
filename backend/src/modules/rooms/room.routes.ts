@@ -2,7 +2,6 @@ import { Router } from "express";
 import { authenticate } from "@modules/auth/auth.middleware";
 import {
     createRoomController,
-    joinRoomController,
     getUserRoomsController,
     createDirectRoomController,
     getUserConversationsController,
@@ -16,8 +15,6 @@ router.post(
     authenticate,
     createRoomController,
 );
-
-router.post("/:roomId/join", authenticate, joinRoomController);
 
 router.get(
     "/",

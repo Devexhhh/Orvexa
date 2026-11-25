@@ -29,15 +29,6 @@ export async function getConversations() {
 
 }
 
-export async function joinRoom(
-    roomId: string,
-) {
-    const response = await api.post(
-        `/api/rooms/${roomId}/join`,
-    );
-
-    return response.data;
-}
 export async function addRoomMember(
     roomId: string,
     userId: string,

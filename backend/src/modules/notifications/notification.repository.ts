@@ -21,14 +21,28 @@ export async function getUserNotifications(userId: string) {
     });
 }
 
-export async function markNotificationAsRead(notificationId: string) {
-    return prisma.notification.update({
+export async function markNotificationAsRead(
+    notificationId: string,
+    userId: string,
+) {
+    const { count } = await prisma.notification.updateMany({
         where: {
             id: notificationId,
+            userId,
         },
 
         data: {
             isRead: true,
+        },
+    });
+
+    if (count === 0) {
+        return null;
+    }
+
+    return prisma.notification.findUnique({
+        where: {
+            id: notificationId,
         },
     });
 }

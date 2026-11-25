@@ -5,6 +5,7 @@ import { attachWebSocketHandlers } from "./socket/wsHandler";
 import { authenticateSocket } from "./socket/middleware/authSocket";
 import { connectRedis } from "@config/redis";
 import { subscribeToRoomEvents } from "socket/utils/redisSubscriber";
+import { presenceManager } from "socket/managers/presenceManager";
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
@@ -39,6 +40,7 @@ server.on("upgrade", (req, socket, head) => {
 async function bootstrap() {
     await connectRedis();
     await subscribeToRoomEvents();
+    await presenceManager.start();
     server.listen(
         Number(PORT),
         "0.0.0.0",
@@ -47,5 +49,22 @@ async function bootstrap() {
         },
     );
 }
+
+//
+// Drop this instance's presence right away instead of
+// waiting for its Redis TTL to expire
+//
+async function shutdown() {
+    try {
+        await presenceManager.stop();
+    } catch (error) {
+        console.error(error);
+    }
+
+    process.exit(0);
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
 
 bootstrap();

@@ -26,10 +26,6 @@ export async function createRoomService(
     return getConversationForUser(room.id, creatorId);
 }
 
-export async function joinRoomService(roomId: string, userId: string) {
-    return addUserToRoom(roomId, userId);
-}
-
 //
 // Add `targetUserId` to a group room on behalf of `requesterId`.
 // Returns the new member and the room as the added user sees it,

@@ -106,18 +106,25 @@ export default function MessageList() {
                                         )}
                                     </div>
                                 )}
-                                {message.type === "image" ? (
-                                    <Image
-                                        src={message.sender?.avatar || "/default-avatar.png"}
-                                        alt="avatar"
-                                        width={32}
-                                        height={32}
-                                        className="mt-1 h-8 w-8 rounded-full object-cover"
-                                    />
-                                ) : message.type === "file" ? (
+                                {message.type === "IMAGE" && message.fileUrl ? (
                                     <a
                                         href={message.fileUrl}
                                         target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Image
+                                            src={message.fileUrl}
+                                            alt={message.fileName || "Image"}
+                                            width={320}
+                                            height={240}
+                                            className="mt-1 h-auto max-h-80 w-auto rounded-lg object-contain"
+                                        />
+                                    </a>
+                                ) : message.type === "FILE" ? (
+                                    <a
+                                        href={message.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="mt-2 block rounded-lg border p-3 underline"
                                     >
                                         📎 {message.fileName}

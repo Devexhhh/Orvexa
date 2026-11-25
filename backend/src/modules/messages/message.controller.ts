@@ -6,7 +6,7 @@ import { getUnreadCountService } from "./message.service";
 export async function getRoomMessagesController(req: Request, res: Response) {
     try {
         const roomId =
-            String(req.params.roomId);;
+            String(req.params.roomId);
         const userId = req.userId!;
         const isMember = await isRoomMemberService(roomId, userId);
         if (!isMember) {
@@ -38,8 +38,16 @@ export async function getUnreadCountController(
     res: Response,
 ) {
     try {
-        const roomId = String(req.params.roomId);;
+        const roomId = String(req.params.roomId);
         const userId = req.userId!;
+
+        if (!(await isRoomMemberService(roomId, userId))) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied",
+            });
+        }
+
         const count = await getUnreadCountService(
             roomId,
             userId,

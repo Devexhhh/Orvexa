@@ -12,6 +12,10 @@
  *
  * Without ids, the first two users in the database are used.
  * The group it creates is deleted at the end.
+ *
+ * Multi-instance: point B at a second backend process to check
+ * that room events and presence cross instances via Redis:
+ *   SMOKE_API_URL_B=http://localhost:3001 npm run smoke:multiuser
  */
 import "dotenv/config";
 import jwt from "jsonwebtoken";
@@ -20,6 +24,8 @@ import { PrismaClient } from "../src/database/generated";
 
 const API_URL = process.env.SMOKE_API_URL || `http://localhost:${process.env.PORT || 3000}`;
 const WS_URL = process.env.SMOKE_WS_URL || API_URL.replace(/^http/, "ws") + "/ws";
+const API_URL_B = process.env.SMOKE_API_URL_B || API_URL;
+const WS_URL_B = process.env.SMOKE_WS_URL_B || API_URL_B.replace(/^http/, "ws") + "/ws";
 const TIMEOUT_MS = 5000;
 
 const prisma = new PrismaClient();
@@ -31,12 +37,18 @@ class Client {
     private waiters: { match: (f: Frame) => boolean; resolve: (f: Frame) => void }[] = [];
     ws!: WebSocket;
 
-    constructor(readonly name: string, readonly userId: string, readonly token: string) { }
+    constructor(
+        readonly name: string,
+        readonly userId: string,
+        readonly token: string,
+        readonly apiUrl = API_URL,
+        readonly wsUrl = WS_URL,
+    ) { }
 
     connect() {
         return new Promise<void>((resolve, reject) => {
             this.frames = [];
-            this.ws = new WebSocket(`${WS_URL}?token=${this.token}`);
+            this.ws = new WebSocket(`${this.wsUrl}?token=${this.token}`);
             this.ws.on("open", () => resolve());
             this.ws.on("error", reject);
             this.ws.on("message", (raw) => {
@@ -90,7 +102,7 @@ class Client {
     }
 
     async api(method: string, path: string, body?: unknown) {
-        const response = await fetch(`${API_URL}${path}`, {
+        const response = await fetch(`${this.apiUrl}${path}`, {
             method,
             headers: {
                 Authorization: `Bearer ${this.token}`,
@@ -99,7 +111,16 @@ class Client {
             body: body ? JSON.stringify(body) : undefined,
         });
 
-        return { status: response.status, body: (await response.json()) as any };
+        const text = await response.text();
+        let parsed: any = text;
+
+        try {
+            parsed = JSON.parse(text);
+        } catch {
+            // Non-JSON (e.g. Express's HTML 404 page)
+        }
+
+        return { status: response.status, body: parsed };
     }
 }
 
@@ -129,11 +150,11 @@ async function main() {
 
     const sign = (userId: string) => jwt.sign({ userId }, secret, { expiresIn: "10m" });
     const A = new Client("A", userAId, sign(userAId));
-    const B = new Client("B", userBId, sign(userBId));
+    const B = new Client("B", userBId, sign(userBId), API_URL_B, WS_URL_B);
 
     let roomId: string | undefined;
 
-    console.log(`Smoke test against ${API_URL} (A=${userAId}, B=${userBId})`);
+    console.log(`Smoke test: A=${userAId} on ${API_URL}, B=${userBId} on ${API_URL_B}`);
 
     try {
         await B.connect();
@@ -211,6 +232,34 @@ async function main() {
         A.send("SEND_MESSAGE", { roomId, type: "TEXT", content: "welcome back" });
         await B.waitFor("MESSAGE_RECEIVED", (d) => d.content === "welcome back");
         pass("after reconnecting, B still receives group messages");
+
+        //
+        // Authorization
+        //
+        const outsider = new Client("C", "smoke-outsider", sign("smoke-outsider"));
+        const selfJoin = await outsider.api("POST", `/api/rooms/${roomId}/join`);
+        assert(selfJoin.status === 404, `self-join route should be gone, got ${selfJoin.status}`);
+        const unread = await outsider.api("GET", `/api/messages/rooms/${roomId}/unread`);
+        assert(unread.status === 403, `non-member unread count should be 403, got ${unread.status}`);
+        const history = await outsider.api("GET", `/api/messages/${roomId}/messages`);
+        assert(history.status === 403, `non-member history should be 403, got ${history.status}`);
+        const addByOutsider = await outsider.api("POST", `/api/rooms/${roomId}/add-member`, {
+            userId: "smoke-outsider",
+        });
+        assert(addByOutsider.status === 403, `non-member add should be 403, got ${addByOutsider.status}`);
+        pass("non-members cannot join, read history/unread, or add members");
+
+        const notifications = await B.api("GET", "/api/notifications");
+        assert(notifications.status === 200, `notifications returned ${notifications.status}`);
+        const mine = notifications.body.notifications.find(
+            (n: any) => n.metadata?.roomId === roomId,
+        );
+        assert(mine, "B should have a notification for A's message");
+        const stolen = await A.api("PATCH", `/api/notifications/${mine.id}/read`);
+        assert(stolen.status === 404, `A marking B's notification should be 404, got ${stolen.status}`);
+        const own = await B.api("PATCH", `/api/notifications/${mine.id}/read`);
+        assert(own.status === 200 && own.body.notification.isRead, "B could not mark own notification");
+        pass("notifications load, and only their owner can mark them read");
 
         console.log(`\nAll ${step} checks passed.`);
     } finally {

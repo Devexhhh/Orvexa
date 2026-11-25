@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { AppError } from "@shared/errors/AppError";
 import {
     createRoomService,
-    joinRoomService,
     getUserRoomsService,
     addMemberService,
     createOrGetDirectRoomService,
@@ -55,23 +54,6 @@ export async function createRoomController(req: Request, res: Response) {
         });
     } catch (error) {
         return sendError(res, error, "Failed to create room");
-    }
-}
-
-export async function joinRoomController(req: Request, res: Response) {
-    try {
-        const roomId = String(req.params.roomId);
-        const userId = req.userId!;
-
-        const membership = await joinRoomService(roomId, userId);
-
-        return res.status(200).json({
-            success: true,
-
-            membership,
-        });
-    } catch (error) {
-        return sendError(res, error, "Failed to join room");
     }
 }
 

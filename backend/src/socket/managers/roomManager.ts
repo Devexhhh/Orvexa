@@ -123,6 +123,21 @@ class RoomManager {
     }
 
     //
+    // Broadcast to every socket on this instance
+    //
+    broadcastToAll(payload: unknown) {
+        const message = JSON.stringify(payload);
+
+        this.userSockets.forEach((sockets) => {
+            sockets.forEach((client) => {
+                if (client.readyState === client.OPEN) {
+                    client.send(message);
+                }
+            });
+        });
+    }
+
+    //
     // Remove socket completely
     //
     removeSocket(ws: CustomWebSocket) {
