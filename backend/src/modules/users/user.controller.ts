@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { getAllUsersService } from "./user.service";
-import { joinRoomService } from "@modules/rooms/room.service";
 
 export async function getAllUsersController(
     req: Request,
@@ -21,20 +20,4 @@ export async function getAllUsersController(
             message: "Failed to fetch users",
         });
     }
-}
-
-export async function addMemberController(
-    req: Request,
-    res: Response,
-) {
-    const membership =
-        await joinRoomService(
-            String(req.params.roomId),
-            req.body.userId,
-        );
-
-    res.json({
-        success: true,
-        membership,
-    });
 }

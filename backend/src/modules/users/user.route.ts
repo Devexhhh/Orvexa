@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "@modules/auth/auth.middleware";
-import { addMemberController, getAllUsersController } from "./user.controller";
+import { getAllUsersController } from "./user.controller";
 
 const router = Router();
 
@@ -10,10 +10,9 @@ router.get(
     getAllUsersController,
 );
 
-router.post(
-    "/:roomId/add-member",
-    authenticate,
-    addMemberController,
-);
+//
+// Adding members lives in the rooms module:
+// POST /api/rooms/:roomId/add-member
+//
 
 export default router;

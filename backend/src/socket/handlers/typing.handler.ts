@@ -2,12 +2,17 @@ import { CustomWebSocket } from "../types/ws.types";
 import { TypingPayload } from "../types/typing.types";
 import { SocketEvent } from "../types/event.types";
 import { broadcastMessage } from "../utils/broadcast";
+import { requireRoomSubscription } from "../middleware/requireRoom";
 
 export async function handleStartTyping(
     ws: CustomWebSocket,
     data: TypingPayload,
 ) {
-    broadcastMessage(
+    if (!requireRoomSubscription(ws, data?.roomId)) {
+        return;
+    }
+
+    await broadcastMessage(
         data.roomId,
         SocketEvent.USER_TYPING,
         {
@@ -21,7 +26,11 @@ export async function handleStopTyping(
     ws: CustomWebSocket,
     data: TypingPayload,
 ) {
-    broadcastMessage(
+    if (!requireRoomSubscription(ws, data?.roomId)) {
+        return;
+    }
+
+    await broadcastMessage(
         data.roomId,
         SocketEvent.USER_STOPPED_TYPING,
 

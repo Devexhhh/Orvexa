@@ -1,18 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUsers } from "@/services/user.service";
+import { getUsers, UserSummary as User } from "@/services/user.service";
 import { createDirectRoom } from "@/services/room.service";
-
-interface User {
-    id: string;
-    username: string;
-    avatar?: string;
-}
+import { useRoomStore } from "@/store/room.store";
 
 export default function NewChatModal() {
     const [users, setUsers] = useState<User[]>([]);
     const [open, setOpen] = useState(false);
+    const upsertRoom = useRoomStore((state) => state.upsertRoom);
+    const setActiveRoom = useRoomStore((state) => state.setActiveRoom);
 
     useEffect(() => {
         if (!open) {
@@ -33,9 +30,11 @@ export default function NewChatModal() {
 
     async function handleStartChat(userId: string) {
         try {
-            await createDirectRoom(userId);
+            const data = await createDirectRoom(userId);
 
-            window.location.reload();
+            upsertRoom(data.room);
+            setActiveRoom(data.room);
+            setOpen(false);
         } catch (error) {
             console.error(error);
         }

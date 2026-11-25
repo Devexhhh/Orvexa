@@ -1,3 +1,10 @@
+export interface ConversationMember {
+    id: string;
+    username: string;
+    avatar?: string | null;
+    lastSeen?: string | null;
+}
+
 export interface Conversation {
     id: string;
     name: string;
@@ -11,4 +18,5 @@ export interface Conversation {
         content: string;
         createdAt: string;
     } | null;
+    members: ConversationMember[];
 }

@@ -8,6 +8,8 @@ import { broadcastPresence } from "./handlers/presence.handler";
 import { SocketEvent } from "./types/event.types";
 import { startHeartbeat } from "./utils/heartbeat";
 import { updateLastSeenService } from "@modules/users/user.service";
+import { getUserRoomIdsService } from "@modules/rooms/room.service";
+import { sendSocketEvent } from "./utils/send";
 import { checkRateLimit } from "./middleware/rateLimiter";
 import { sendSocketError } from "@shared/utils/socketError";
 
@@ -23,15 +25,40 @@ export function attachWebSocketHandlers(wss: WebSocketServer) {
         }
         const userId = ws.userId;
         ws.isAlive = true;
-        presenceManager.addUser(ws.userId);
+        roomManager.registerUserSocket(ws);
+        presenceManager.addUser(userId);
+
+        //
+        // Snapshot of who is already online
+        //
+        sendSocketEvent(ws, SocketEvent.ONLINE_USERS, {
+            userIds: presenceManager.getOnlineUsers(),
+        });
 
         broadcastPresence(
             wss,
 
             SocketEvent.USER_ONLINE,
 
-            ws.userId,
+            userId,
         );
+
+        //
+        // Subscribe to every room the user belongs to,
+        // so sidebar updates and unread counts arrive
+        // for rooms that are not open
+        //
+        getUserRoomIdsService(userId)
+            .then((roomIds) => {
+                if (ws.readyState !== ws.OPEN) {
+                    return;
+                }
+
+                roomIds.forEach((roomId) => roomManager.joinRoom(roomId, ws));
+            })
+            .catch((error) => {
+                console.error("ROOM SUBSCRIBE ERROR:", error);
+            });
 
         ws.on("error", (error) => {
             console.error("WS CONNECTION ERROR:", error);
@@ -90,13 +117,30 @@ export function attachWebSocketHandlers(wss: WebSocketServer) {
         ws.on("close", async () => {
             roomManager.removeSocket(ws);
             presenceManager.removeUser(userId);
+
+            //
+            // Other tabs/devices still connected
+            //
+            if (presenceManager.isOnline(userId)) {
+                ws.removeAllListeners();
+                return;
+            }
+
+            const lastSeen = new Date();
+
             try {
-                await updateLastSeenService(userId);
+                await updateLastSeenService(userId, lastSeen);
             } catch (error) {
                 console.error(error);
             }
+
+            //
+            // User may have reconnected while we were saving
+            //
             if (!presenceManager.isOnline(userId)) {
-                broadcastPresence(wss, SocketEvent.USER_OFFLINE, userId);
+                broadcastPresence(wss, SocketEvent.USER_OFFLINE, userId, {
+                    lastSeen,
+                });
             }
             ws.removeAllListeners();
             console.log("Client disconnected");

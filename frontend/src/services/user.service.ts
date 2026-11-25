@@ -1,36 +1,19 @@
 import { api } from "@/lib/api/client";
 
+export interface UserSummary {
+    id: string;
+    username: string;
+    avatar?: string | null;
+    email?: string;
+    lastSeen?: string | null;
+}
+
 export async function searchUsers(query: string) {
-    const response = await api.get(`/api/users/search?q=${query}`);
+    const response = await api.get(`/api/users/search?q=${encodeURIComponent(query)}`);
     return response.data;
 }
 
-export async function getUsers() {
+export async function getUsers(): Promise<UserSummary[]> {
     const response = await api.get("/api/users");
     return response.data.users;
-}
-
-export async function createDirectRoom(
-    targetUserId: string,
-) {
-    const response = await api.post(
-        "/api/rooms/direct",
-        {
-            targetUserId,
-        },
-    );
-
-    return response.data.room;
-}
-
-export async function addMember(
-    roomId: string,
-    userId: string,
-) {
-    return api.post(
-        `/api/rooms/${roomId}/add-member`,
-        {
-            userId,
-        },
-    );
 }

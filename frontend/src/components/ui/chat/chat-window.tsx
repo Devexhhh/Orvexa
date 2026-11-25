@@ -11,6 +11,7 @@ import { sendSocketEvent } from "@/lib/socket/socketClient";
 
 import { SocketEvent } from "@/types/socket";
 import { useAuthStore } from "@/store/auth.store";
+import RoomHeader from "./room-header";
 
 export default function ChatWindow() {
     const user = useAuthStore((state) => state.user);
@@ -21,7 +22,12 @@ export default function ChatWindow() {
     const bottomRef = useRef<HTMLDivElement>(null);
     const typingState = useTypingStore((state) => state.typingUsers);
     const clearUnread = useRoomStore((state) => state.clearUnread);
-    const typingUsers = activeRoom ? typingState[activeRoom.id] || [] : [];
+    const typingUserIds = activeRoom ? typingState[activeRoom.id] || [] : [];
+    const typingUsers = typingUserIds.map(
+        (userId) =>
+            activeRoom?.members.find((member) => member.id === userId)?.username ||
+            "Someone",
+    );
     const prependMessages = useMessageStore((state) => state.prependMessages);
     const [loadingMore, setLoadingMore] = useState(false);
     const oldestMessage = messages[0];
@@ -54,20 +60,9 @@ export default function ChatWindow() {
     }
 
     const previousCount = useRef(0);
+    const lastSeenSentFor = useRef<string | null>(null);
 
 
-    useEffect(() => {
-        if (!activeRoom) {
-            return;
-        }
-
-        sendSocketEvent({
-            event: SocketEvent.ROOM_MESSAGE_SEEN,
-            data: {
-                roomId: activeRoom.id,
-            },
-        });
-    }, [activeRoom]);
 
     useEffect(() => {
         if (messages.length > previousCount.current && !loadingMore) {
@@ -94,56 +89,56 @@ export default function ChatWindow() {
             }
         }
         loadMessages();
-    }, [activeRoom, setMessages]);
+    }, [activeRoom?.id, setMessages]);
 
     useEffect(() => {
         if (!activeRoom) {
             return;
         }
 
+        //
+        // The server subscribes us to all our rooms on connect;
+        // this is an idempotent re-subscribe. We do not LEAVE_ROOM
+        // on switch, otherwise sidebar updates for this room stop.
+        //
         sendSocketEvent({
             event: SocketEvent.JOIN_ROOM,
             data: {
                 roomId: activeRoom.id,
             },
         });
-
-        return () => {
-            sendSocketEvent({
-                event: SocketEvent.LEAVE_ROOM,
-                data: {
-                    roomId: activeRoom.id,
-                },
-            });
-        };
-    }, [activeRoom]);
+    }, [activeRoom?.id]);
 
     useEffect(() => {
         if (!activeRoom) {
             return;
         }
-        const unseenMessages = messages.filter(
-            (message) =>
-                message.senderId !== user?.id &&
-                message.status !== "seen" &&
-                !message.optimistic,
-        );
-        unseenMessages.forEach((message) => {
-            if (
-                message.senderId !== user?.id &&
-                message.status !== "seen" &&
-                !message.optimistic
-            ) {
-                sendSocketEvent({
-                    event: SocketEvent.MESSAGE_SEEN,
-                    data: {
-                        roomId: activeRoom.id,
-                        messageId: message.id,
-                    },
-                });
-            }
+
+        //
+        // One event marks the whole room as read, sent when the room
+        // opens and whenever someone else's message arrives in it.
+        //
+        const lastMessage = messages[messages.length - 1];
+
+        if (!lastMessage || lastMessage.optimistic || lastMessage.senderId === user?.id) {
+            return;
+        }
+
+        if (lastSeenSentFor.current === lastMessage.id) {
+            return;
+        }
+
+        lastSeenSentFor.current = lastMessage.id;
+
+        sendSocketEvent({
+            event: SocketEvent.ROOM_MESSAGE_SEEN,
+            data: {
+                roomId: activeRoom.id,
+            },
         });
-    }, [messages, activeRoom]);
+
+        clearUnread(activeRoom.id);
+    }, [messages, activeRoom?.id, user?.id]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -172,17 +167,15 @@ export default function ChatWindow() {
 
     return (
         <div className="flex flex-1 flex-col">
-            <div className="border-b p-4 text-lg font-semibold">
-                {activeRoom.name}
-            </div>
+            <RoomHeader room={activeRoom} />
 
             <div ref={containerRef} className="flex-1 overflow-y-auto">
                 <MessageList />
             </div>
             {typingUsers.length > 0 && (
                 <div className="px-4 pb-2 text-sm text-gray-500">
-                    {typingUsers.join(", ")}
-                    typing...
+                    {typingUsers.join(", ")}{" "}
+                    {typingUsers.length === 1 ? "is" : "are"} typing...
                 </div>
             )}
 

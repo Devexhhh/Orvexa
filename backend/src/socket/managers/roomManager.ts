@@ -35,7 +35,7 @@ class RoomManager {
     //
     // Get user sockets
     //
-    getUserSockets(userId: string) {
+    getUserSockets(userId: string): Set<CustomWebSocket> {
         return this.userSockets.get(userId) || new Set();
     }
 
@@ -56,10 +56,23 @@ class RoomManager {
         }
 
         this.rooms.get(roomId)?.add(ws);
+    }
 
-        ws.roomId = roomId;
+    //
+    // Subscribe every local socket of a user to a room
+    // (e.g. right after they are added to it)
+    //
+    joinRoomForUser(roomId: string, userId: string) {
+        this.getUserSockets(userId).forEach((socket) => {
+            this.joinRoom(roomId, socket);
+        });
+    }
 
-        console.log(`Socket joined room: ${roomId}`);
+    //
+    // Is this socket subscribed to the room?
+    //
+    isInRoom(roomId: string, ws: CustomWebSocket) {
+        return this.rooms.get(roomId)?.has(ws) ?? false;
     }
 
     //
@@ -97,12 +110,7 @@ class RoomManager {
     ) {
 
         const room = this.rooms.get(roomId);
-        console.log(
-            "BROADCAST ROOM",
-            roomId,
-            "size:",
-            room?.size,
-        );
+
         if (!room) {
             return;
         }

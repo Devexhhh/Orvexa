@@ -5,6 +5,7 @@ export function broadcastPresence(
     wss: WebSocketServer,
     event: SocketEvent,
     userId: string,
+    extra: Record<string, unknown> = {},
 ) {
     wss.clients.forEach((client) => {
         if (client.readyState === client.OPEN) {
@@ -13,6 +14,7 @@ export function broadcastPresence(
                     event,
                     data: {
                         userId,
+                        ...extra,
                     },
                 }),
             );

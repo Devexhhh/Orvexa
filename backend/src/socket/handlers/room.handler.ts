@@ -1,33 +1,31 @@
-import { CustomWebSocket }
-    from "../types/ws.types";
+import { CustomWebSocket } from "../types/ws.types";
+import { roomManager } from "../managers/roomManager";
+import { isRoomMemberService } from "@modules/rooms/room.service";
+import { sendSocketError } from "@shared/utils/socketError";
 
-import { roomManager }
-    from "../managers/roomManager";
-
+//
+// Sockets are subscribed to all of the user's rooms on connect.
+// JOIN_ROOM is kept as an explicit (idempotent) re-subscribe,
+// and only succeeds for members.
+//
 export async function handleJoinRoom(
     ws: CustomWebSocket,
-    data: any
+    data: any,
 ) {
+    const roomId = data?.roomId;
 
-    const { roomId } = data;
-    console.log(
-        "JOIN ROOM",
-        roomId,
-        ws.userId,
-    );
-    roomManager.joinRoom(
-        roomId,
-        ws
-    );
+    if (typeof roomId !== "string" || !roomId) {
+        return;
+    }
 
-    roomManager.broadcastToRoom(
-        roomId,
-        {
-            event: "USER_JOINED",
-            data: {
-                roomId
-            }
-        }
-    );
+    if (roomManager.isInRoom(roomId, ws)) {
+        return;
+    }
 
+    if (!(await isRoomMemberService(roomId, ws.userId!))) {
+        sendSocketError(ws, "You are not a member of this room");
+        return;
+    }
+
+    roomManager.joinRoom(roomId, ws);
 }

@@ -11,6 +11,7 @@ import { handleMarkAsRead } from "../handlers/read.handler";
 import { handleEditMessage } from "../handlers/edit.handler";
 import { handleDeleteMessage } from "../handlers/delete.handler";
 import { messageSeenHandler } from "../handlers/messageSeen.handler";
+import { handleRoomMessageSeen } from "../handlers/roomMessageSeen.handler";
 
 
 export const eventHandlers: Partial<Record<SocketEvent, EventHandler>> = {
@@ -23,4 +24,5 @@ export const eventHandlers: Partial<Record<SocketEvent, EventHandler>> = {
     [SocketEvent.EDIT_MESSAGE]: handleEditMessage,
     [SocketEvent.DELETE_MESSAGE]: handleDeleteMessage,
     [SocketEvent.MESSAGE_SEEN]: messageSeenHandler,
+    [SocketEvent.ROOM_MESSAGE_SEEN]: handleRoomMessageSeen,
 };

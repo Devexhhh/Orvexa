@@ -82,6 +82,13 @@ export const useMessageStore = create<MessageState>((set) => ({
         set((state) => {
             const existing = state.messages[roomId] || [];
 
+            //
+            // Already have it (e.g. loaded from the API)
+            //
+            if (existing.some((msg) => msg.id === incomingMessage.id)) {
+                return state;
+            }
+
             let replaced = false;
 
             const updated = existing.map((msg) => {
@@ -99,11 +106,9 @@ export const useMessageStore = create<MessageState>((set) => ({
                 return {
                     ...incomingMessage,
                     optimistic: false,
-                    status: "sent",
+                    status: "sent" as const,
                 };
             });
-
-            console.log("OPTIMISTIC_REPLACED", replaced);
 
             return {
                 messages: {
