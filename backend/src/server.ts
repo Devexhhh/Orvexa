@@ -6,6 +6,9 @@ import { authenticateSocket } from "./socket/middleware/authSocket";
 import { connectRedis } from "@config/redis";
 import { subscribeToRoomEvents } from "socket/utils/redisSubscriber";
 import { presenceManager } from "socket/managers/presenceManager";
+import { deliverPresenceLocally } from "socket/handlers/presence.handler";
+import { SocketEvent } from "socket/types/event.types";
+import { updateLastSeenService } from "@modules/users/user.service";
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
@@ -40,7 +43,24 @@ server.on("upgrade", (req, socket, head) => {
 async function bootstrap() {
     await connectRedis();
     await subscribeToRoomEvents();
-    await presenceManager.start();
+    //
+    // Users whose instance crashed: every instance tells its own
+    // clients (no Redis fan-out needed); one persists lastSeen
+    //
+    await presenceManager.start(async (userIds) => {
+        const lastSeen = new Date();
+
+        for (const userId of userIds) {
+            deliverPresenceLocally({
+                event: SocketEvent.USER_OFFLINE,
+                data: { userId, lastSeen },
+            });
+
+            if (await presenceManager.claimOfflineWrite(userId)) {
+                await updateLastSeenService(userId, lastSeen).catch(console.error);
+            }
+        }
+    });
     server.listen(
         Number(PORT),
         "0.0.0.0",

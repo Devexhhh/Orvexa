@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import { generateToken } from "./jwt";
 import { prisma } from "@database/prisma";
+import { primaryClientUrl } from "@config/env";
 
 export function googleCallback(req: Request, res: Response) {
     const user = req.user as any;
     const token = generateToken(user.id);
-    const frontendUrl = "http://localhost:3001/auth/callback";
+    const frontendUrl = `${primaryClientUrl}/auth/callback`;
     return res.redirect(`${frontendUrl}?token=${token}`);
 }
 

@@ -23,7 +23,7 @@ export enum SocketEvent {
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
 }
 
-export interface SocketPayload<T = any> {
+export interface SocketPayload<T = unknown> {
     event: SocketEvent;
     data: T;
 }

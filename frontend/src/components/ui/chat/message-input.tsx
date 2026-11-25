@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRoomStore } from "@/store/room.store";
 
@@ -12,7 +12,7 @@ import { useMessageStore } from "@/store/message.store";
 
 import { useAuthStore } from "@/store/auth.store";
 
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { Smile } from "lucide-react";
 import { Paperclip } from "lucide-react";
 
@@ -21,7 +21,11 @@ import { uploadFile } from "@/services/upload.service";
 export default function MessageInput() {
     const [message, setMessage] = useState("");
 
-    const [isTyping, setIsTyping] = useState(false);
+    //
+    // Room we last sent START_TYPING to (null = not typing).
+    // A ref, not state: it never affects rendering.
+    //
+    const typingRoomRef = useRef<string | null>(null);
 
     const activeRoom = useRoomStore((state) => state.activeRoom);
     const roomId =
@@ -34,34 +38,35 @@ export default function MessageInput() {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [uploading, setUploading] = useState(false);
 
+    const stopTyping = useCallback(() => {
+        const typingRoomId = typingRoomRef.current;
+
+        if (!typingRoomId) {
+            return;
+        }
+
+        typingRoomRef.current = null;
+
+        sendSocketEvent({
+            event: SocketEvent.STOP_TYPING,
+            data: {
+                roomId: typingRoomId,
+            },
+        });
+    }, []);
+
     useEffect(() => {
-        if (!roomId) {
+        if (!roomId || !message.trim()) {
+            stopTyping();
             return;
         }
 
         //
-        // Empty input
+        // Start typing (stopping first if we switched rooms mid-typing)
         //
-        if (!message.trim()) {
-            if (isTyping) {
-                setIsTyping(false);
-                sendSocketEvent({
-                    event: SocketEvent.STOP_TYPING,
-
-                    data: {
-                        roomId,
-                    },
-                });
-            }
-
-            return;
-        }
-
-        //
-        // Start typing
-        //
-        if (!isTyping) {
-            setIsTyping(true);
+        if (typingRoomRef.current !== roomId) {
+            stopTyping();
+            typingRoomRef.current = roomId;
 
             sendSocketEvent({
                 event: SocketEvent.START_TYPING,
@@ -74,21 +79,12 @@ export default function MessageInput() {
         //
         // Stop typing after inactivity
         //
-        const timeout = setTimeout(() => {
-            setIsTyping(false);
-            sendSocketEvent({
-                event: SocketEvent.STOP_TYPING,
-
-                data: {
-                    roomId,
-                },
-            });
-        }, 1000);
+        const timeout = setTimeout(stopTyping, 1000);
 
         return () => clearTimeout(timeout);
-    }, [message, roomId]);
+    }, [message, roomId, stopTyping]);
 
-    function handleEmojiSelect(emojiData: any) {
+    function handleEmojiSelect(emojiData: EmojiClickData) {
         setMessage((prev) => prev + emojiData.emoji);
     }
 
@@ -144,12 +140,6 @@ export default function MessageInput() {
     }
 
     function sendMessage() {
-        console.log("SEND MESSAGE CLICKED");
-        console.log({
-            message,
-            roomId,
-            user,
-        });
         if (!message.trim() || !roomId || !user) {
             return;
         }
@@ -160,6 +150,7 @@ export default function MessageInput() {
                 id: crypto.randomUUID(),
                 roomId: roomId,
                 senderId: user.id,
+                type: "TEXT",
                 content: message,
                 createdAt: new Date().toISOString(),
                 optimistic: true,
@@ -181,15 +172,7 @@ export default function MessageInput() {
         });
 
         setMessage("");
-        setIsTyping(false);
-
-        sendSocketEvent({
-            event: SocketEvent.STOP_TYPING,
-
-            data: {
-                roomId: roomId,
-            },
-        });
+        stopTyping();
     }
 
     return (
@@ -205,6 +188,15 @@ export default function MessageInput() {
                 <input
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                        //
+                        // Enter sends; ignore while an IME is composing
+                        //
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    }}
                     className="flex-1 rounded-lg border p-3"
                     placeholder="Type message..."
                 />

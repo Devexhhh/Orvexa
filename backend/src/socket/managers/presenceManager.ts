@@ -15,21 +15,40 @@ const HEARTBEAT_MS = 10_000;
 const TTL_SECONDS = 30;
 
 const serverKey = (serverId: string) => `presence:server:${serverId}`;
+const offlineLockKey = (userId: string) => `presence:offline-lock:${userId}`;
+
+//
+// Called with users that went offline without a USER_OFFLINE
+// event (their instance crashed and its presence expired)
+//
+type VanishedHandler = (userIds: string[]) => void | Promise<void>;
 
 class PresenceManager {
     private local: Map<string, number> = new Map();
     private heartbeat?: NodeJS.Timeout;
 
     //
+    // Who this instance believes is online, from presence events
+    // and the last heartbeat. Diffed against Redis each heartbeat.
+    //
+    private known: Set<string> = new Set();
+    private onVanished?: VanishedHandler;
+
+    //
     // Register this instance and keep its presence fresh
     //
-    async start() {
+    async start(onVanished?: VanishedHandler) {
+        this.onVanished = onVanished;
+
         await this.sync();
+        this.known = new Set(await this.getOnlineUsers());
 
         this.heartbeat = setInterval(() => {
-            this.sync().catch((error) => {
-                console.error("PRESENCE SYNC ERROR:", error);
-            });
+            this.sync()
+                .then(() => this.reconcile())
+                .catch((error) => {
+                    console.error("PRESENCE SYNC ERROR:", error);
+                });
         }, HEARTBEAT_MS);
 
         this.heartbeat.unref();
@@ -134,6 +153,43 @@ class PresenceManager {
         }
 
         return Array.from(online);
+    }
+
+    //
+    // Keep `known` in step with presence events as they are delivered
+    //
+    markOnline(userId: string) {
+        this.known.add(userId);
+    }
+
+    markOffline(userId: string) {
+        this.known.delete(userId);
+    }
+
+    //
+    // Only one instance should persist lastSeen for a vanished user
+    //
+    async claimOfflineWrite(userId: string) {
+        const claimed = await redis.set(offlineLockKey(userId), SERVER_ID, {
+            condition: "NX",
+            expiration: { type: "EX", value: TTL_SECONDS },
+        });
+
+        return claimed === "OK";
+    }
+
+    //
+    // Users we thought were online but no live instance reports
+    //
+    private async reconcile() {
+        const online = new Set(await this.getOnlineUsers());
+        const vanished = [...this.known].filter((id) => !online.has(id));
+
+        this.known = online;
+
+        if (vanished.length > 0 && this.onVanished) {
+            await this.onVanished(vanished);
+        }
     }
 
     //

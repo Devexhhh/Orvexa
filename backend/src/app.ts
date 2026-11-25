@@ -10,12 +10,13 @@ import userRoutes from "@modules/users/user.route";
 import path from "path";
 import notificationRoutes from "@modules/notifications/notification.routes";
 import { errorMiddleware } from "@shared/errors/errorMiddleware";
+import { clientUrls } from "@config/env";
 
 const app = express();
 
 app.use(
     cors({
-        origin: "http://localhost:3001",
+        origin: clientUrls,
         credentials: true,
     }),
 );

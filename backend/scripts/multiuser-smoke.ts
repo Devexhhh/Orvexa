@@ -157,6 +157,19 @@ async function main() {
     console.log(`Smoke test: A=${userAId} on ${API_URL}, B=${userBId} on ${API_URL_B}`);
 
     try {
+        //
+        // The offline/online checks need B to have no other session
+        // (e.g. a browser tab), or B correctly stays online
+        //
+        const probe = new Client("probe", A.userId, A.token);
+        await probe.connect();
+        const before = await probe.waitFor("ONLINE_USERS");
+        await probe.close();
+        assert(
+            !before.userIds.includes(B.userId),
+            "B is already online elsewhere (close their browser tabs first)",
+        );
+
         await B.connect();
         await A.connect();
         await B.waitFor("USER_ONLINE", (d) => d.userId === A.userId);

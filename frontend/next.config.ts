@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  //
+  // Dev only: lets a second local origin (127.0.0.1) load the app,
+  // so two users can be signed in side by side in one browser
+  //
+  allowedDevOrigins: ["127.0.0.1"],
   images: {
     remotePatterns: [
       {

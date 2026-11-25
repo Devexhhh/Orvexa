@@ -1,4 +1,5 @@
 import { roomManager } from "../managers/roomManager";
+import { presenceManager } from "../managers/presenceManager";
 import { SocketEvent } from "../types/event.types";
 import { publishSocketEvent } from "../utils/redisPublisher";
 
@@ -13,6 +14,12 @@ export interface PresencePayload {
 // Send to every socket connected to this instance
 //
 export function deliverPresenceLocally({ event, data }: PresencePayload) {
+    if (event === SocketEvent.USER_ONLINE) {
+        presenceManager.markOnline(data.userId);
+    } else if (event === SocketEvent.USER_OFFLINE) {
+        presenceManager.markOffline(data.userId);
+    }
+
     roomManager.broadcastToAll({ event, data });
 }
 
